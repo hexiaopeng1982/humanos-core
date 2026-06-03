@@ -1,55 +1,68 @@
 #include <stdio.h>
-#include <unistd.h> // for sleep
+#include <unistd.h>
 #include "../include/bio_state.h"
 #include "../include/driver.h"
 
-/* 引入驱动段（Linker Magic） */
-extern driver_ops_t __start_drivers;
-extern driver_ops_t __stop_drivers;
+/* ========= 全局人体状态 ========= */
+static bio_state_t g_human = {0};
 
-/* 全局状态 */
-static bio_state_t g_human_state;
+/* ========= 驱动表（手动注册，不依赖 linker magic） =========
+ * 新驱动想加入，只需在 drivers/某目录里定义自己的 _drv_xxx 结构体，
+ * 然后把它的指针加到这个表里即可。
+ */
+extern driver_ops_t _drv_anti_inflammation;   /* 来自 drivers/example/anti_inflammation.c */
+/* extern driver_ops_t _drv_xxx;  ← 以后新驱动在这里声明 extern */
 
-void update_simulation(bio_state_t* state) {
-    // 模拟自然衰老：炎症增加，能量减少
-    state->inflammation += 0.01f;
-    state->energy -= 0.005f;
-    if (state->inflammation > 1.0f) state->inflammation = 1.0f;
-    if (state->energy < 0.0f) state->energy = 0.0f;
+static driver_ops_t* g_drv_table[] = {
+    &_drv_anti_inflammation,
+    /* &_drv_xxx, */
+    NULL
+};
+
+/* ========= 模拟环境：自然漂移（熵增） ========= */
+static void sim_tick(bio_state_t* s)
+{
+    s->timestamp++;
+    s->inflammation += 0.01f;
+    s->energy       -= 0.005f;
+    if (s->inflammation > 1.0f) s->inflammation = 1.0f;
+    if (s->energy       < 0.0f) s->energy       = 0.0f;
 }
 
-int main(void) {
-    printf("[Kernel] HumanOS Core v0.1 Booting...\n");
+/* ========= 内核主循环 ========= */
+int main(void)
+{
+    printf("[HumanOS] Core v0.1 booting...\n");
 
-    /* 初始化状态 */
-    g_human_state.inflammation = 0.1f;
-    g_human_state.energy = 1.0f;
+    g_human.inflammation = 0.10f;
+    g_human.energy       = 1.00f;
+    g_human.heart_rate   = 72.0f;
+    g_human.body_temp    = 36.7f;
 
-    /* 遍历所有注册的驱动 */
-    driver_ops_t** drv_ptr;
-    for (drv_ptr = &__start_drivers; drv_ptr < &__stop_drivers; drv_ptr++) {
-        driver_ops_t* drv = *drv_ptr;
-        printf("[Kernel] Loading driver: %s\n", drv->name);
-        drv->init();
-    }
+    /* init 阶段 */
+    for (driver_ops_t** pp = g_drv_table; *pp; ++pp)
+        (*pp)->init();
 
-    /* 主循环 */
+    /* super-loop */
     while (1) {
-        update_simulation(&g_human_state);
-        
-        printf("[State] Inflam: %.2f | Energy: %.2f\n", 
-               g_human_state.inflammation, g_human_state.energy);
+        sim_tick(&g_human);
 
-        // 调度驱动
-        for (drv_ptr = &__start_drivers; drv_ptr < &__stop_drivers; drv_ptr++) {
-            driver_ops_t* drv = *drv_ptr;
-            if (drv->diagnose(&g_human_state) == 1) {
-                printf("[Kernel] Driver %s triggered!\n", drv->name);
-                drv->repair(&g_human_state);
+        printf("[State] t=%u  inflam=%.3f  energy=%.3f  HR=%.0f\n",
+               g_human.timestamp,
+               g_human.inflammation,
+               g_human.energy,
+               g_human.heart_rate);
+
+        for (driver_ops_t** pp = g_drv_table; *pp; ++pp) {
+            driver_ops_t* d = *pp;
+            if (d->diagnose(&g_human) == 1) {
+                printf("  -> [%s] triggered, repairing...\n", d->name);
+                d->repair(&g_human);
             }
         }
 
-        sleep(1); // 1Hz 心跳
+        sleep(1);
     }
     return 0;
 }
+

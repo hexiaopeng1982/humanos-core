@@ -2,35 +2,38 @@
 #include "../../include/driver.h"
 #include "../../include/bio_state.h"
 
-static int init(void) {
-    printf("AntiInflammation Driver Init.\n");
+/* ---------- 驱动内部实现 ---------- */
+static int drv_init(void)
+{
+    printf("  [driver][anti_inflam] init OK\n");
     return 0;
 }
 
-static int diagnose(const bio_state_t* state) {
-    if (state->inflammation > 0.5f) {
-        return 1; // 需要修复
-    }
-    return 0; // 正常
+static int drv_diagnose(const bio_state_t *s)
+{
+    /* 炎症阈值：>0.50 认为需要干预 */
+    return (s->inflammation > 0.50f) ? 1 : 0;
 }
 
-static int repair(bio_state_t* state) {
-    printf("Applying anti-inflammation protocol...\n");
-    state->inflammation -= 0.1f; // 修复逻辑
+static int drv_repair(bio_state_t *s)
+{
+    /* 模拟“抗炎/清理衰老代谢产物”的效果 */
+    s->inflammation -= 0.10f;
+    if (s->inflammation < 0.0f) s->inflammation = 0.0f;
     return 0;
 }
 
-static void deinit(void) {
-    printf("AntiInflammation Driver Exit.\n");
+static void drv_deinit(void)
+{
+    printf("  [driver][anti_inflam] deinit\n");
 }
 
-/* 注册驱动 */
-static driver_ops_t anti_inflammation_driver = {
-    .name = "anti_inflammation_v1",
-    .init = init,
-    .diagnose = diagnose,
-    .repair = repair,
-    .deinit = deinit
+/* ---------- 导出实例（scheduler 通过 extern 引用这个符号） ---------- */
+driver_ops_t _drv_anti_inflammation = {
+    .name      = "anti_inflam_v1",
+    .init      = drv_init,
+    .diagnose  = drv_diagnose,
+    .repair    = drv_repair,
+    .deinit    = drv_deinit,
 };
 
-REGISTER_DRIVER(anti_inflammation_driver);

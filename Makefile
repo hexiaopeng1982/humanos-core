@@ -5,7 +5,7 @@ LDFLAGS=-Wl,--gc-sections
 TARGET=humanos
 
 SRCS=kernel/scheduler.c \
-     drivers/example/anti_inflammation.c
+	drivers/example/anti_inflammation.c
 
 OBJS=$(SRCS:.c=.o)
 
@@ -18,3 +18,4 @@ clean:
 	rm -f $(OBJS) $(TARGET)
 
 .PHONY: all clean
+
